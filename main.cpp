@@ -11,7 +11,7 @@ protected:
 public:
     Rectangle posi;
     int speed, ctrl_up, ctrl_down, ctrl_hab1;
-    bool hab1;
+    bool hab1, is_bot;
     float timeh1;
 
 void draw() {
@@ -34,16 +34,8 @@ void update() {
 
     limits();
 }
-};
 
-class Cpu: public Paddle {
-
-public:
-void draw() {
-    DrawRectangle(posi.x, posi.y, posi.width, posi.height, WHITE);
-}
-
-void update(float bola) {
+void update_bot(float bola) {
 
     if (bola > posi.height/2 + posi.y)
         posi.y += speed;
@@ -51,7 +43,7 @@ void update(float bola) {
     if (bola < posi.height/2 + posi.y)
         posi.y -= speed;
 
-    if (GetRandomValue(0, 10000) == 3000 && hab1) {
+    if (GetRandomValue(0, 3333) == 3000 && hab1) {
         posi.height = 200;
         hab1 = false;
         timeh1 = GetTime();
@@ -95,7 +87,7 @@ void update() {
 }
 };
 
-void default_configs(Paddle *player, Cpu *player2, Ball *bola) {
+void default_configs(Paddle *player, Paddle *player2, Ball *bola) {
     player2->posi.width = player->posi.width = 15;
     player2->posi.height = player->posi.height = 80;
     player2->speed = player->speed = 7;
@@ -121,66 +113,116 @@ void default_configs(Paddle *player, Cpu *player2, Ball *bola) {
     bola->cor = WHITE;
 }
 
-void drawing(Paddle *player, Cpu *bot, Ball *bola, short paused)
+void draw_controls(char ctr[], float posi)
+{
+    float h = GetScreenHeight();
+    float a = 70;
+    DrawRectangleLinesEx(Rectangle{posi, h * 0.60f, a, a}, 0.9f, WHITE);
+    DrawRectangleLinesEx(Rectangle{posi, h * 0.60f + a, a, a}, 0.9f, WHITE);
+    DrawRectangleLinesEx(Rectangle{posi + 2*a, h * 0.60f + a, a, a}, 0.9f, WHITE);
+
+    float alt = h * 0.615f;
+    DrawText(TextFormat("%c%c", ctr[0], ctr[1]), posi + 14, alt, 50, WHITE);
+    DrawText(TextFormat("%c%c", ctr[2], ctr[3]), posi + 14,  alt + a, 50, WHITE);
+
+    DrawText(TextFormat("%c", ctr[4]), posi + 14 + 2*a, alt + a, 50, WHITE);
+    
+}
+
+void drawing(Paddle *player, Paddle *player2, Ball *bola, short paused)
 {
     BeginDrawing();
     ClearBackground(BLACK);
     player->draw();
-    bot->draw();
+    player2->draw();
     bola->draw();
     DrawLine(GetScreenWidth()/2, 0, GetScreenWidth()/2, GetScreenHeight(), WHITE);
     DrawText(TextFormat("%d", bola->p1), GetScreenWidth() * 0.25f, 20, 60, WHITE);
     DrawText(TextFormat("%d", bola->p2), GetScreenWidth() * 0.75f, 20, 60, WHITE);
 
-    if (paused == 1)
-        DrawText("Paused", GetScreenWidth()/2 - 140, 50, 70, SKYBLUE);
-
+    if (paused == 1) {
+        char ctr1[] = "W S E";
+        char ctr2[] = "UpDw0";
+        DrawRectangle(0, 0, GetScreenWidth() * 0.40f, GetScreenHeight() * 0.3f, BLACK);
+        DrawText("Poooong", 20, 10, 80, WHITE);
+        DrawText("P -> pause\nR -> Restart", GetScreenWidth() * 0.05f, GetScreenHeight() * 0.6f, 30, WHITE);
+        if (player2->is_bot) {
+            DrawText("-> Player vs CPU", 40, 90, 50, SKYBLUE);
+            DrawText("   Player vs Player", 40, 140, 50, WHITE);
+            draw_controls(ctr1, GetScreenWidth() * 0.25f);
+        }
+        else {
+            DrawText("   Player vs CPU", 40, 90, 50, WHITE);
+            DrawText("-> Player vs Player", 40, 140, 50, SKYBLUE);
+            draw_controls(ctr1, GetScreenWidth() * 0.25f);
+            draw_controls(ctr2, GetScreenWidth() * 0.75f);
+        }
+    }
     EndDrawing();
 }
 
-void updating(Paddle *player, Cpu *bot, Ball *bola) {
+void updating(Paddle *player, Paddle *player2, Ball *bola) {
 
     if (CheckCollisionCircleRec(bola->posi, bola->raio, player->posi)) {
         bola->speed_x *= -1.1f;
         player->speed *= 1.1f;
-        bot->speed *= 1.1f;
+        player2->speed *= 1.1f;
     }
-    if (CheckCollisionCircleRec(bola->posi, bola->raio, bot->posi)) {
+    if (CheckCollisionCircleRec(bola->posi, bola->raio, player2->posi)) {
         bola->speed_x *= -1.1f;
         player->speed *= 1.1f;
-        bot->speed *= 1.1f;
+        player2->speed *= 1.1f;
     }
-
     if (bola->is_point) {
         bola->cor = GREEN;
-        drawing(player, bot, bola, -1);
+        drawing(player, player2, bola, -1);
         WaitTime(0.5f);
-        default_configs(player, bot, bola);
+        default_configs(player, player2, bola);
     }
+
     player->update();
-    bot->update(bola->posi.y);
+    if (player2->is_bot)
+        player2->update_bot(bola->posi.y);
+    else
+        player2->update();
+
     bola->update();
+}
+
+void updating_pause(Paddle *player1, Paddle *player2, Ball *bola)
+{
+    if (IsKeyPressed(KEY_W))
+        player2->is_bot = true;
+    if (IsKeyPressed(KEY_S))
+        player2->is_bot = false;
+    if (IsKeyPressed(KEY_R)) {
+        default_configs(player1, player2, bola);
+        bola->p1 = bola->p2 = 0;
+    }
 }
 
 int main(void)
 {
     int width = 1280, height = 720;
     Paddle player, player2;
-    Cpu bot;
     short paused = 1;
     Ball bola;
 
     InitWindow(width, height, "Pong de cria");
-    SetTargetFPS(60);
-
     bola.p1 = bola.p2 = 0;
-    default_configs(&player, &bot, &bola);
+    SetTargetFPS(60);
+    
+
+    default_configs(&player, &player2, &bola);
+    player2.is_bot = false;
     while (!WindowShouldClose())
     {
-        if(paused != 1) {
-            updating(&player, &bot, &bola);
-        }
-        drawing(&player, &bot, &bola, paused);
+        if(paused != 1)
+            updating(&player, &player2, &bola);
+        else
+            updating_pause(&player, &player2, &bola);
+        drawing(&player, &player2, &bola, paused);
+
         if (IsKeyReleased(KEY_P))
             paused *= -1;
     }
